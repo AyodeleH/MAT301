@@ -1,0 +1,195 @@
+---
+title: "Leading Causes of Death"
+author: "Ayodele, Cenk"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+linestretch: 2
+editor_options:
+  chunk_output_type: console
+---
+
+```{r,include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE,message = FALSE,error = FALSE)
+library(readr)
+library(tidyverse)
+library(ggforce)
+
+```
+# Background 
+Leading Causes of Death from NYC OpenData, gives a combination of observations collected between 2007 to 2014. The data collected features multiple biological diseases that are impacting the community and the number of deaths per year. In this report, we will examine the effect the leading causes of diseases has on the public.
+
+
+# Summary of the dataset for the Death
+The graphs for the male and female show that for every year there are always more female deaths than male deaths. The graph shows there are some consistency  with the deaths per year for each gender. As seen in the before graph where the death numbers don't drastically decrease or increase. The numbers are around the same, but looking at the summmary for the graphs of deaths, the average mean is 165 and the standard deviation is 186. 
+
+# Question: What is the total number of deaths per year in New York City? 
+
+```{r}
+New_York_City_Leading_Causes_of_Death <- read_csv("New_York_City_Leading_Causes_of_Death.csv")
+
+#Taking away the NA in the data
+data_to_use <- as_tibble(New_York_City_Leading_Causes_of_Death)
+without <- data_to_use %>% 
+  filter(!is.na(`Leading Cause`),!is.na(`Race Ethnicity`))
+
+#Plotting the number of deaths per year
+New_York_City_Leading_Causes_of_Death %>%
+  group_by(Year) %>%
+  summarise(total = sum(as.numeric(Deaths),na.rm = T)) %>% 
+  slice(1:8) %>% 
+  ungroup() %>% 
+  ggplot(aes(Year, total))+
+  geom_col(stat = "identity", fill = "blue", color = "green", width = 0.3 )+
+  labs(x = c("Year"), y = c("Total"), title = "Number of Deaths in NYC")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+
+```{r}
+death_summary <- New_York_City_Leading_Causes_of_Death %>%
+  group_by(Deaths)%>%
+  summarise(mean_death = mean(as.numeric(Deaths),na.rm = T),
+            sd_death = sd(as.numeric(Deaths),na.rm = T)) %>% 
+  ungroup() %>% 
+  filter_all(~!is.na(.)) 
+
+death_summary%>%
+  summarise(mean_death = mean(as.numeric(Deaths)),
+            sd_death = sd(as.numeric(Deaths)),
+            median_death = median(as.numeric(Deaths)), 
+            min_death = min(as.numeric(Deaths)),
+            max_death = max(as.numeric(Deaths)))
+```
+
+# Given the data: What are death counts of each sex in New York per year?
+
+
+```{r}
+New_York_City_Leading_Causes_of_Death %>% 
+      group_by(Sex,Year)%>%
+    summarise(total = sum(as.numeric(Deaths),na.rm = T)) %>% 
+  slice(1:8) %>% 
+  filter(!is.na(Sex) ) %>% 
+  ggplot(aes(x=Year,y=total, fill = Sex))+
+  geom_col(position="dodge")+
+  scale_fill_manual(values=c("green","orange"))+
+  labs(title = "Death by Sex")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+# Summary of the Data
+This graph shows the separtio of the data by gender. In this graph you can see what gender is being effected by biological diseases the most. Women tend to have more of a mortality than there male counter part. In the seven years of observation, each year the women's numbers of death have remained drastically higher than those of men. We thought that there might be a biological reasons that women die more than men. There are more graphs that later help us with knowing those causes.
+
+
+# Subsetting Dataset by Grouping Year and Ethnicity
+
+```{r}
+subset_2 <- New_York_City_Leading_Causes_of_Death %>%
+  group_by(`Race Ethnicity`,Year) %>%
+  summarise(total = sum(as.numeric(Deaths)))
+
+ggplot(data = subset_2, aes(x= `Race Ethnicity` , y = total, fill = Year)) + 
+    geom_bar(stat = "identity")+ 
+  labs(title = "Death by Race")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Showing the relationship of leading causes of death to the Year and the gender
+
+```{r}
+diseases <- New_York_City_Leading_Causes_of_Death %>% 
+  group_by(`Leading Cause`, Year,Sex, `Leading Cause`) %>% 
+  summarise(total = sum(as.numeric(Deaths),na.rm = T)) %>%
+  ungroup() 
+diseases %>% 
+  filter(!is.na(Sex))%>%
+  ggplot(aes(Year,total,))+
+  geom_violin(fill = "blue", color = "red")+
+ facet_wrap(~Sex)+
+labs(title = "Distribution of Diseases causing death per year")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+# Summary of the Data
+The reason for this graph is to show the data given the leading causes and the year and the number of deaths. The blue spots are the leading causes and there number of deaths. If you can see on the graph there are blue dots on the graph that stretch beyond the general population of leading causes that stay the around the same numbers. As we show the graph for each gender side by side, they show the different shapes each year makes based upon the year. With the women's graph mostly staying the same, the men's graph shapes have changed pver the years. Those maybe due to the outliers but from year 2007 to year 2011 the shapes changed in the graphs.  We want to now figure out why women are dying so much from those leading causes who are outliers on the graph. 
+
+
+# Question: What diseases is causing women to die the most?
+
+```{r}
+female_deaths <- New_York_City_Leading_Causes_of_Death %>%
+  group_by(Sex, Year, `Leading Cause`, Deaths)%>%
+  summarise(total = sum(as.numeric(Deaths), na.rm = T))%>%
+  ungroup() %>% 
+  filter(Sex == "Female")
+female_deaths %>% 
+  select(Year,`Leading Cause`,total) %>% 
+  group_by(Year) %>% 
+  top_n(5)%>% 
+  ungroup() %>% 
+  ggplot(aes(`Leading Cause`, total, fill = Year))+
+  geom_boxplot()+
+  geom_jitter(alpha = 0.2)+
+  coord_flip()+
+  theme(axis.text.y = element_text(size = 7,angle = 0))+
+  labs(title = "Disease Related Deaths on Women")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+New_York_City_Leading_Causes_of_Death %>%
+  group_by(Sex , `Leading Cause`) %>%
+  summarise(mean_death = mean(as.numeric(Deaths),na.rm = T),
+            sd_death = sd(as.numeric(Deaths),na.rm = T)) %>% 
+  ungroup() %>% 
+  filter_all(~!is.na(.)) %>% 
+  filter(`Leading Cause`%in% c("All Other Causes", "Diseases of Heart (I00-I09, I11, I13, I20-I51)", "Malignant Neoplasms (Cancer: C00-C97)"))
+  #filter(`Leading Cause` %in% c("Diseases of Heart (I00-I09, I11, I13, I20-I51)"))
+```
+
+# Summary of the data:
+This graph shows the top 3 diseases that impacted the women population the most. The leading causes are "Malignant Neoplasms", "Diseases of Heart", and "All Other Causes". This data shows discrete data that has specific observations recorded. 
+
+
+### Summary of All other Causes for Female Mortality
+Results show: Mean, Standard Deviation, Median, Minimum, and Maximum
+```{r}
+#Average for the Overal Data
+female_deaths %>% 
+  filter(`Leading Cause` == "All Other Causes") %>% 
+  summarise(mean_total = mean(total), 
+            sd_total = sd(total),
+            median_total = median(total),
+            min_total = min(total),
+            max_total = max(total))
+```
+
+### Summary of Diseases of the Heart in the Female Group
+
+```{r}
+female_deaths %>% 
+  filter(`Leading Cause` == "Diseases of Heart (I00-I09, I11, I13, I20-I51)") %>% 
+  summarise(mean_total = mean(total), 
+            sd_total = sd(total),
+            median_total = median(total),
+            min_total = min(total),
+            max_total = max(total))
+```
+
+### Summary for Cancer in Female
+
+```{r}
+female_deaths %>% 
+  filter(`Leading Cause` == "Malignant Neoplasms (Cancer: C00-C97)") %>% 
+  summarise(mean_total = mean(total), 
+            sd_total = sd(total),
+            median_total = median(total),
+            min_total = min(total),
+            max_total = max(total))
+```
+
+Therefore, we were wrong in our assumption to think that the data was normally distributed. Since the median and the mean are not the same, due to many ouliers in the data that stretched the data. 
+
+
